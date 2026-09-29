@@ -1,6 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import { NORD_DARK, NORD_LIGHT } from "../shared/themes";
+import contribute from "../index.client";
+
+type ThemeCall = {
+	id: string;
+	name: string;
+	appearance: "dark" | "light";
+	colors: Record<string, string>;
+};
+
+function runPlugin() {
+	const calls: ThemeCall[] = [];
+	const client = {
+		addTheme: (contribution: ThemeCall) => {
+			calls.push(contribution);
+			return () => {};
+		},
+	};
+	const cleanup = contribute(client as never);
+	return { calls, cleanup };
+}
 
 type Rgb = { r: number; g: number; b: number };
 
@@ -37,81 +56,112 @@ const REQUIRED = [
 	"ring",
 ] as const;
 
+describe("plugin registration", () => {
+	it("registers a dark and a light theme with lowercase-hyphen ids", () => {
+		const { calls } = runPlugin();
+		expect(calls).toHaveLength(2);
+		expect(calls.map((c) => c.id)).toEqual(["nord-vscode", "nord-vscode-light"]);
+		for (const call of calls) {
+			expect(call.id).toMatch(/^[a-z0-9-]+$/);
+			expect(call.name).toBeTruthy();
+		}
+	});
+
+	it("labels the themes dark and light respectively", () => {
+		const { calls } = runPlugin();
+		expect(calls[0].appearance).toBe("dark");
+		expect(calls[1].appearance).toBe("light");
+	});
+
+	it("returns a cleanup function", () => {
+		const { cleanup } = runPlugin();
+		expect(typeof cleanup).toBe("function");
+	});
+});
+
 describe.each([
-	["dark", NORD_DARK],
-	["light", NORD_LIGHT],
-])("nord %s palette (VS Code Nord reference)", (_name, palette) => {
-	it("defines all required theme colors as hex", () => {
+	["dark", 0],
+	["light", 1],
+])("registered %s palette", (_name, index) => {
+	const palette = () => runPlugin().calls[index].colors;
+
+	it("defines all required theme colors as 6-digit hex", () => {
 		for (const key of REQUIRED) {
-			expect(palette[key], `missing color: ${key}`).to.match(/^#[0-9a-f]{6}$/i);
+			expect(palette()[key], `missing color: ${key}`).to.match(/^#[0-9a-f]{6}$/i);
 		}
 	});
 
 	it("keeps text readable (contrast >= 7 against background)", () => {
-		expect(contrast(palette.foreground, palette.background)).toBeGreaterThanOrEqual(7);
+		const c = palette();
+		expect(contrast(c.foreground, c.background)).toBeGreaterThanOrEqual(7);
 	});
 
 	it("keeps muted text readable (contrast >= 4.5)", () => {
-		expect(contrast(palette.mutedForeground, palette.background)).toBeGreaterThanOrEqual(4.5);
+		const c = palette();
+		expect(contrast(c.mutedForeground, c.background)).toBeGreaterThanOrEqual(4.5);
 	});
 
-	it("keeps accent text readable (contrast >= 3, matching VS Code Nord links)", () => {
-		expect(palette.accent, "accent color missing").toBeDefined();
-		expect(contrast(palette.accent!, palette.background)).toBeGreaterThanOrEqual(3);
+	it("keeps accent text readable (contrast >= 3, VS Code Nord link color)", () => {
+		const c = palette();
+		expect(contrast(c.accent, c.background)).toBeGreaterThanOrEqual(3);
 	});
 
 	it("foreground and mutedForeground remain distinct", () => {
-		expect(palette.mutedForeground).not.toBe(palette.foreground);
+		const c = palette();
+		expect(c.mutedForeground).not.toBe(c.foreground);
 	});
 });
 
 describe("dark palette matches the VS Code Nord theme source", () => {
-	it("link/accent color is nord8, the VS Code textLink.foreground", () => {
-		// nordtheme/visual-studio-code: textLink.foreground = #88c0d0
-		expect(NORD_DARK.accent).toBe("#88c0d0");
+	// Reference values: nordtheme/visual-studio-code themes/nord-color-theme.json
+	const palette = () => runPlugin().calls[0].colors;
+
+	it("uses the VS Code Nord surfaces (nord0 base, nord1 raised/controls)", () => {
+		const c = palette();
+		expect(c.background).toBe("#2e3440"); // editor.background
+		expect(c.raised).toBe("#3b4252"); // statusBar.background
+		expect(c.control).toBe("#3b4252"); // input.background
 	});
 
-	it("accent is neither the port's orange nor Obsidian's purple", () => {
-		expect(NORD_DARK.accent).not.toBe("#d08770");
-		expect(NORD_DARK.accent).not.toBe("#b48ead");
+	it("uses nord8 as the accent, the VS Code Nord link color", () => {
+		expect(palette().accent).toBe("#88c0d0"); // textLink.foreground
 	});
 
-	it("surfaces use the VS Code Nord structure (nord0 base, nord1 raised/controls)", () => {
-		expect(NORD_DARK.background).toBe("#2e3440"); // editor.background
-		expect(NORD_DARK.raised).toBe("#3b4252"); // statusBar.background
-		expect(NORD_DARK.control).toBe("#3b4252"); // input.background
+	it("keeps borders subtle at nord1, like VS Code Nord's panel.border", () => {
+		const c = palette();
+		expect(c.border).toBe("#3b4252"); // panel.border, input.border
+		expect(contrast(c.border, c.background)).toBeLessThan(1.35);
 	});
 
-	it("section dividers are subtle, like VS Code Nord's nord1 borders", () => {
-		// VS Code Nord: panel.border / input.border / focusBorder = #3b4252
-		// (contrast 1.19 on nord0). The port's nord2 (1.32) and our earlier
-		// nord3 (1.69) read as heavy dividers, so border stays at nord1 and
-		// focus visibility is carried by the nord8 ring instead.
-		expect(NORD_DARK.border).toBe("#3b4252");
-		expect(contrast(NORD_DARK.border, NORD_DARK.background)).toBeLessThan(1.35);
+	it("keeps terminal bright black gray (nord3), matching ansiBrightBlack", () => {
+		// `ring` also maps to terminal bright black and scrollbars in Paseo;
+		// VS Code Nord's terminal.ansiBrightBlack is nord3, not a frost color.
+		const c = palette();
+		expect(c.ring).toBe("#4c566a"); // terminal.ansiBrightBlack
+		expect(c.ring).not.toBe(c.accent);
 	});
 
-	it("raised surfaces still separate from background by fill (VS Code's tab model)", () => {
-		// VS Code Nord: tab.activeBackground #3b4252 on inactive #2e3440.
-		expect(contrast(NORD_DARK.raised, NORD_DARK.background)).toBeGreaterThan(1.15);
-	});
-
-	it("focus visibility is carried by the nord8 ring, not the border", () => {
-		// badge.background / list.activeSelectionBackground = #88c0d0
-		expect(NORD_DARK.ring).toBe("#88c0d0");
-		expect(contrast(NORD_DARK.ring, NORD_DARK.background)).toBeGreaterThanOrEqual(3);
+	it("uses nord4 for muted text, VS Code Nord's editor/terminal foreground", () => {
+		expect(palette().mutedForeground).toBe("#d8dee9"); // editor.foreground
 	});
 });
 
-describe("light palette (no VS Code reference; nord10 stands in for nord8)", () => {
-	it("uses the darker frost shade for readable links on white", () => {
-		expect(NORD_LIGHT.accent).toBeDefined();
-		expect(NORD_LIGHT.accent).toBe("#5e81ac"); // nord10
-		expect(contrast(NORD_LIGHT.accent!, NORD_LIGHT.background)).toBeGreaterThanOrEqual(3);
+describe("light palette (original; VS Code Nord is dark-only)", () => {
+	const palette = () => runPlugin().calls[1].colors;
+
+	it("uses nord10, the darkest frost, for readable links on white", () => {
+		expect(palette().accent).toBe("#5e81ac");
 	});
 
 	it("keeps dividers subtle (nord5 border on white)", () => {
-		expect(NORD_LIGHT.border).toBe("#e5e9f0"); // nord5
-		expect(contrast(NORD_LIGHT.border, NORD_LIGHT.background)).toBeLessThan(1.4);
+		const c = palette();
+		expect(c.border).toBe("#e5e9f0");
+		expect(contrast(c.border, c.background)).toBeLessThan(1.4);
+	});
+
+	it("keeps terminal bright black gray like the dark variant", () => {
+		const c = palette();
+		expect(c.ring).toBe("#4c566a");
+		expect(c.ring).not.toBe(c.accent);
 	});
 });

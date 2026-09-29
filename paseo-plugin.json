@@ -1,6 +1,7 @@
 {
-  "id": "paseo-nord-vscode-theme",
-  "requirements": {
-    "paseo": ">=0.10.1"
-  }
+	"id": "paseo-nord-vscode-theme",
+	"description": "Nord theme for Paseo, unofficially ported from the VS Code Nord theme.",
+	"requirements": {
+		"paseo": ">=0.10.1"
+	}
 }
