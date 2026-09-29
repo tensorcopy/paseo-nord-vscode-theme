@@ -1,0 +1,6 @@
+{
+  "id": "paseo-nord-vscode-theme",
+  "requirements": {
+    "paseo": ">=0.10.1"
+  }
+}

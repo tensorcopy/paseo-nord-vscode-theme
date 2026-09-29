@@ -1,0 +1,32 @@
+{
+	"name": "paseo-nord-vscode-theme",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"description": "Nord theme for Paseo, ported from the official VS Code Nord theme (nordtheme/visual-studio-code).",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/tensorcopy/paseo-nord-vscode-theme.git"
+	},
+	"keywords": [
+		"paseo",
+		"paseo-plugin",
+		"theme",
+		"nord"
+	],
+	"files": [
+		"paseo-plugin.json",
+		"index.client.ts",
+		"shared/"
+	],
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"devDependencies": {
+		"@getpaseo/plugin": "0.10.1",
+		"typescript": "^5.9.3",
+		"vitest": "^3.2.4"
+	}
+}
