@@ -19,7 +19,7 @@ The palette maps the VS Code Nord theme's workbench colors onto Paseo's 8 theme 
 
 ## Install
 
-From npm (Paseo 0.9+):
+From npm (Paseo 0.10.1+):
 
 ```bash
 paseo plugin install npm:paseo-nord-vscode-theme
